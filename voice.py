@@ -23,7 +23,7 @@ SILENCE_DURATION = 1.5        # seconds of silence to stop recording
 MAX_RECORD_SECONDS = 30       # safety cap
 
 LM_STUDIO_URL = "http://localhost:1234"
-LM_STUDIO_MODEL = "qwen/qwen3-4b"
+LM_STUDIO_MODEL = "openai/gpt-oss-20b"
 SYSTEM_PROMPT = "You are a helpful voice assistant. Keep responses concise — 1-3 sentences max."
 
 TTS_MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
@@ -121,7 +121,7 @@ def play_audio(wav: np.ndarray, sr: int):
 # ── ASR ─────────────────────────────────────────────────────────────────────
 def load_asr():
     print("  Loading ASR model (faster-whisper base.en)...")
-    model = WhisperModel("base.en", device="cpu", compute_type="int8")
+    model = WhisperModel("base.en", device="cuda", compute_type="float16")
     print("  ASR ready.")
     return model
 

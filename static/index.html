@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Assistant</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #252525;
+    --border: #333;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --user-bg: #1e3a5f;
+    --assistant-bg: #262626;
+    --danger: #ef4444;
+    --success: #22c55e;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ─────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: background 0.3s;
+  }
+
+  .status-dot.connected { background: var(--success); }
+
+  .status-text {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .toggle-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+  .toggle-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.1); }
+
+  .clear-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  .clear-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Chat area ──────────────────────────────── */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+
+  .msg {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    animation: slideIn 0.2s ease-out;
+    position: relative;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--assistant-bg);
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg .badge {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 1px 6px;
+    font-size: 11px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-dim);
+  }
+
+  .msg .badge + .badge { margin-left: 4px; }
+
+  .msg .content { white-space: pre-wrap; word-break: break-word; }
+
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--accent);
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: blink 0.8s step-end infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .system-msg {
+    align-self: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 4px 12px;
+    background: var(--surface2);
+    border-radius: 12px;
+  }
+
+  /* ── Waveform ───────────────────────────────── */
+  #waveform-container {
+    display: none;
+    justify-content: center;
+    padding: 8px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+
+  #waveform-container.active { display: flex; }
+
+  #waveform {
+    width: 100%;
+    max-width: 600px;
+    height: 48px;
+  }
+
+  /* ── Input bar ──────────────────────────────── */
+  .input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #text-input {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #text-input:focus { border-color: var(--accent); }
+  #text-input::placeholder { color: var(--text-dim); }
+
+  .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .icon-btn.send-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .icon-btn.send-btn:hover { background: var(--accent-hover); }
+
+  .icon-btn.recording {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Voice Assistant</h1>
+  <div class="header-controls">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-text" id="status-text">Disconnected</span>
+    <button class="toggle-btn" id="tts-toggle" title="Toggle text-to-speech">TTS</button>
+    <button class="clear-btn" id="clear-btn">Clear</button>
+  </div>
+</header>
+
+<div id="chat"></div>
+
+<div id="waveform-container">
+  <canvas id="waveform"></canvas>
+</div>
+
+<div class="input-bar">
+  <button class="icon-btn" id="mic-btn" title="Push to talk">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  </button>
+  <input type="text" id="text-input" placeholder="Type a message..." autocomplete="off" />
+  <button class="icon-btn send-btn" id="send-btn" title="Send">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────
+let ws = null;
+let reconnectTimer = null;
+let ttsEnabled = false;
+let ttsAvailable = false;
+let isRecording = false;
+let mediaStream = null;
+let scriptProcessor = null;
+let audioContext = null;
+let recordedChunks = [];
+let activeAssistantEl = null;
+let streamingText = "";
+let micAvailable = false;
+
+const chat = document.getElementById("chat");
+const textInput = document.getElementById("text-input");
+const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("mic-btn");
+const clearBtn = document.getElementById("clear-btn");
+const ttsToggle = document.getElementById("tts-toggle");
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const waveformContainer = document.getElementById("waveform-container");
+const waveformCanvas = document.getElementById("waveform");
+const waveformCtx = waveformCanvas.getContext("2d");
+
+// ── WebSocket ────────────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    statusDot.classList.add("connected");
+    statusText.textContent = "Connected";
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onclose = () => {
+    statusDot.classList.remove("connected");
+    statusText.textContent = "Disconnected";
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleMessage(msg);
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+  }
+}
+
+// ── Message handler ──────────────────────────────────────────────────────
+function handleMessage(msg) {
+  switch (msg.type) {
+    case "status":
+      statusText.textContent = msg.message;
+      if (msg.tts_available !== undefined) {
+        ttsAvailable = msg.tts_available;
+        ttsToggle.style.display = ttsAvailable ? "" : "none";
+      }
+      break;
+
+    case "transcription":
+      addUserMessage(msg.text, `ASR ${msg.time}s`);
+      break;
+
+    case "llm_token":
+      if (!activeAssistantEl) {
+        activeAssistantEl = addAssistantMessage("");
+        streamingText = "";
+      }
+      streamingText += msg.token;
+      updateAssistantMessage(activeAssistantEl, streamingText, true);
+      break;
+
+    case "llm_done":
+      if (activeAssistantEl) {
+        updateAssistantMessage(activeAssistantEl, msg.text || streamingText, false, `LLM ${msg.time}s`);
+      }
+      // don't clear activeAssistantEl yet — TTS badge may still arrive
+      if (!ttsEnabled || !ttsAvailable) {
+        activeAssistantEl = null;
+        streamingText = "";
+      }
+      break;
+
+    case "tts_audio":
+      if (activeAssistantEl) {
+        appendBadge(activeAssistantEl, `TTS ${msg.time}s`);
+      }
+      activeAssistantEl = null;
+      streamingText = "";
+      playAudio(msg.audio);
+      break;
+
+    case "error":
+      addSystemMessage(msg.message);
+      activeAssistantEl = null;
+      streamingText = "";
+      break;
+  }
+}
+
+// ── Chat UI ──────────────────────────────────────────────────────────────
+function addUserMessage(text, ...badges) {
+  const el = document.createElement("div");
+  el.className = "msg user";
+  el.innerHTML = `<div class="content">${escHtml(text)}</div>`;
+  badges.forEach(b => {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = b;
+    el.appendChild(badge);
+  });
+  chat.appendChild(el);
+  scrollToBottom();
+  return el;
+}
+
+function addAssistantMessage(text) {
+  const el = document.createElement("div");
+  el.className = "msg assistant";
+  el.innerHTML = `<div class="content">${escHtml(text)}<span class="cursor"></span></div>`;
+  chat.appendChild(el);
+  scrollToBottom();
+  return el;
+}
+
+function updateAssistantMessage(el, text, streaming, ...badges) {
+  const content = el.querySelector(".content");
+  content.innerHTML = escHtml(text) + (streaming ? '<span class="cursor"></span>' : '');
+  badges.forEach(b => appendBadge(el, b));
+  scrollToBottom();
+}
+
+function appendBadge(el, text) {
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = text;
+  el.appendChild(badge);
+}
+
+function addSystemMessage(text) {
+  const el = document.createElement("div");
+  el.className = "system-msg";
+  el.textContent = text;
+  chat.appendChild(el);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Text input ───────────────────────────────────────────────────────────
+function sendText() {
+  const text = textInput.value.trim();
+  if (!text) return;
+  addUserMessage(text);
+  send({ type: "text", text });
+  textInput.value = "";
+  textInput.focus();
+}
+
+sendBtn.addEventListener("click", sendText);
+textInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendText();
+  }
+});
+
+// ── Mic / recording ─────────────────────────────────────────────────────
+async function checkMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    micAvailable = true;
+  } catch {
+    micAvailable = false;
+    micBtn.disabled = true;
+    micBtn.title = "No microphone available";
+  }
+}
+
+micBtn.addEventListener("click", () => {
+  if (isRecording) stopRecording();
+  else startRecording();
+});
+
+async function startRecording() {
+  if (!micAvailable) return;
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+
+    // ScriptProcessor for raw PCM access
+    const bufSize = 4096;
+    scriptProcessor = audioContext.createScriptProcessor(bufSize, 1, 1);
+    recordedChunks = [];
+
+    scriptProcessor.onaudioprocess = (e) => {
+      const data = e.inputBuffer.getChannelData(0);
+      recordedChunks.push(new Float32Array(data));
+      drawWaveform(data);
+    };
+
+    source.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
+
+    isRecording = true;
+    micBtn.classList.add("recording");
+    waveformContainer.classList.add("active");
+    resizeWaveform();
+  } catch (err) {
+    addSystemMessage("Mic error: " + err.message);
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  micBtn.classList.remove("recording");
+  waveformContainer.classList.remove("active");
+
+  if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+
+  if (recordedChunks.length === 0) return;
+
+  // Merge and downsample to 16kHz Int16
+  const nativeSR = audioContext ? audioContext.sampleRate : 48000;
+  const merged = mergeChunks(recordedChunks);
+  const resampled = downsample(merged, nativeSR, 16000);
+  const int16 = float32ToInt16(resampled);
+
+  if (audioContext) { audioContext.close(); audioContext = null; }
+
+  // Send as base64
+  const b64 = arrayBufferToBase64(int16.buffer);
+  send({ type: "audio", audio: b64 });
+}
+
+function mergeChunks(chunks) {
+  let len = 0;
+  chunks.forEach(c => len += c.length);
+  const out = new Float32Array(len);
+  let off = 0;
+  chunks.forEach(c => { out.set(c, off); off += c.length; });
+  return out;
+}
+
+function downsample(buffer, fromSR, toSR) {
+  if (fromSR === toSR) return buffer;
+  const ratio = fromSR / toSR;
+  const newLen = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLen);
+  for (let i = 0; i < newLen; i++) {
+    const idx = i * ratio;
+    const lo = Math.floor(idx);
+    const hi = Math.min(lo + 1, buffer.length - 1);
+    const frac = idx - lo;
+    result[i] = buffer[lo] * (1 - frac) + buffer[hi] * frac;
+  }
+  return result;
+}
+
+function float32ToInt16(float32) {
+  const int16 = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return int16;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// ── Waveform visualizer ──────────────────────────────────────────────────
+function resizeWaveform() {
+  waveformCanvas.width = waveformCanvas.clientWidth * devicePixelRatio;
+  waveformCanvas.height = waveformCanvas.clientHeight * devicePixelRatio;
+  waveformCtx.scale(devicePixelRatio, devicePixelRatio);
+}
+
+function drawWaveform(data) {
+  const w = waveformCanvas.clientWidth;
+  const h = waveformCanvas.clientHeight;
+  waveformCtx.clearRect(0, 0, w, h);
+  waveformCtx.strokeStyle = "#3b82f6";
+  waveformCtx.lineWidth = 1.5;
+  waveformCtx.beginPath();
+
+  const step = Math.ceil(data.length / w);
+  const mid = h / 2;
+  for (let x = 0; x < w; x++) {
+    const idx = x * step;
+    const val = idx < data.length ? data[idx] : 0;
+    const y = mid + val * mid * 0.9;
+    if (x === 0) waveformCtx.moveTo(x, y);
+    else waveformCtx.lineTo(x, y);
+  }
+  waveformCtx.stroke();
+}
+
+// ── TTS audio playback ──────────────────────────────────────────────────
+function playAudio(base64wav) {
+  const binary = atob(base64wav);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "audio/wav" });
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.onended = () => URL.revokeObjectURL(url);
+  audio.play().catch(() => {});
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────
+ttsToggle.addEventListener("click", () => {
+  ttsEnabled = !ttsEnabled;
+  ttsToggle.classList.toggle("active", ttsEnabled);
+  send({ type: "config", tts_enabled: ttsEnabled });
+});
+
+clearBtn.addEventListener("click", () => {
+  chat.innerHTML = "";
+  activeAssistantEl = null;
+  streamingText = "";
+  send({ type: "clear" });
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────
+checkMic();
+connect();
+textInput.focus();
+</script>
+</body>
+</html>
