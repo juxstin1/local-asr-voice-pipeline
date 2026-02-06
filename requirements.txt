@@ -1,0 +1,7 @@
+faster-whisper==1.2.1
+sounddevice==0.5.5
+numpy>=1.26,<2.0
+requests>=2.31,<3.0
+qwen-tts==0.0.4
+torch>=2.4
+torchaudio>=2.4
